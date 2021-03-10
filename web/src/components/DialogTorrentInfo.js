@@ -2,10 +2,11 @@ import React, { useEffect } from 'react'
 import Typography from '@material-ui/core/Typography'
 import { Button, ButtonGroup, Grid, List, ListItem } from '@material-ui/core'
 import CachedIcon from '@material-ui/icons/Cached'
+import PlayArrow from '@material-ui/icons/PlayArrow'
 import LinearProgress from '@material-ui/core/LinearProgress';
 
 import { getPeerString, humanizeSize } from '../utils/Utils'
-import { playlistTorrHost, streamHost, viewedHost } from '../utils/Hosts'
+import { playlistTorrHost, streamHost, viewedHost, playHost } from '../utils/Hosts'
 import DialogTitle from '@material-ui/core/DialogTitle'
 import DialogContent from '@material-ui/core/DialogContent'
 
@@ -88,6 +89,24 @@ export default function DialogTorrentInfo(props) {
                                 <Button onClick={() => fetch(streamHost() + '?link=' + torrent.hash + '&index=' + file.id + '&preload')}>
                                     <CachedIcon />
                                     <Typography>Preload</Typography>
+                                </Button>
+                                <Button onClick={() => {
+                                    const uri = streamHost() + '/' + encodeURIComponent(file.path.split('\\').pop().split('/').pop()) + '?link=' + torrent.hash + '&index=' + file.id + '&play';
+                                    return fetch(playHost(), {
+                                            method: 'POST',
+                                            cache: 'no-cache',
+                                            credentials: 'same-origin',
+                                            headers: {
+                                                'Content-Type': 'application/json'
+                                            },
+                                            body: JSON.stringify({
+                                                uri: uri,
+                                            })
+                                        });
+                                    }
+                                }>
+                                    <PlayArrow />
+                                    <Typography>Play</Typography>
                                 </Button>
                             </ButtonGroup>
                         ))}
