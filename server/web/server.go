@@ -3,7 +3,6 @@ package web
 import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-
 	"server/log"
 	"server/torr"
 	"server/version"
@@ -17,7 +16,7 @@ var (
 	waitChan = make(chan error)
 )
 
-func Start(port string) {
+func Start(addr string) {
 	log.TLogln("Start TorrServer", version.Version)
 	err := BTS.Connect()
 	if err != nil {
@@ -39,8 +38,8 @@ func Start(port string) {
 		api.SetupRoute(&route.RouterGroup)
 		pages.SetupRoute(&route.RouterGroup)
 	}
-	log.TLogln("Start web", port)
-	waitChan <- route.Run(":" + port)
+	log.TLogln("Start web", addr)
+	waitChan <- route.Run(addr)
 }
 
 func Wait() error {

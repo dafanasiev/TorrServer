@@ -5,12 +5,12 @@ import (
 	"server/web"
 )
 
-func Start(port string, roSets bool) {
+func Start(addr string, roSets bool) {
 	settings.InitSets(roSets)
-	if port == "" {
-		port = "8090"
+	if addr == "" {
+		panic("addr not set")
 	}
-	web.Start(port)
+	web.Start(addr)
 }
 
 func WaitServer() string {

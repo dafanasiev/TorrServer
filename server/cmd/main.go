@@ -1,15 +1,10 @@
 package main
 
 import (
-	"context"
-	"fmt"
-	"net"
 	"os"
 	"time"
 
 	"github.com/alexflint/go-arg"
-	"github.com/pkg/browser"
-
 	"server"
 	"server/log"
 	"server/settings"
@@ -17,13 +12,12 @@ import (
 )
 
 type args struct {
-	Port     string `arg:"-p" help:"web server port"`
+	Addr     string `arg:"-p" help:"web server host:port"`
 	Path     string `arg:"-d" help:"database path"`
 	LogPath  string `arg:"-l" help:"log path"`
 	RDB      bool   `arg:"-r" help:"start in read-only DB mode"`
 	HttpAuth bool   `arg:"-a" help:"http auth on all requests"`
 	DontKill bool   `arg:"-k" help:"dont kill server on signal"`
-	UI       bool   `arg:"-u" help:"run page torrserver in browser"`
 }
 
 func (args) Version() string {
@@ -39,45 +33,19 @@ func main() {
 		params.Path, _ = os.Getwd()
 	}
 
-	if params.Port == "" {
-		params.Port = "8090"
+	if params.Addr == "" {
+		params.Addr = "127.0.0.1:8090"
 	}
 
 	settings.Path = params.Path
 	settings.HttpAuth = params.HttpAuth
 	log.Init(params.LogPath)
 
-	dnsResolve()
 	Preconfig(params.DontKill)
 
-	if params.UI {
-		go func() {
-			time.Sleep(time.Second)
-			browser.OpenURL("http://127.0.0.1:" + params.Port)
-		}()
-	}
-
-	server.Start(params.Port, params.RDB)
+	server.Start(params.Addr, params.RDB)
 	log.TLogln(server.WaitServer())
 	time.Sleep(time.Second * 3)
 	os.Exit(0)
 }
 
-func dnsResolve() {
-	addrs, err := net.LookupHost("www.google.com")
-	if len(addrs) == 0 {
-		fmt.Println("Check dns", addrs, err)
-
-		fn := func(ctx context.Context, network, address string) (net.Conn, error) {
-			d := net.Dialer{}
-			return d.DialContext(ctx, "udp", "1.1.1.1:53")
-		}
-
-		net.DefaultResolver = &net.Resolver{
-			Dial: fn,
-		}
-
-		addrs, err = net.LookupHost("www.themoviedb.org")
-		fmt.Println("Check new dns", addrs, err)
-	}
-}
