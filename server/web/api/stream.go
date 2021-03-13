@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"server/torr"
+	"server/torr/state"
 	"server/web/api/utils"
 
 	"github.com/gin-gonic/gin"
@@ -36,6 +37,7 @@ func stream(c *gin.Context) {
 	_, play := c.GetQuery("play")
 	title := c.Query("title")
 	poster := c.Query("poster")
+	data := ""
 	notAuth := c.GetBool("not_auth")
 
 	if notAuth && play {
@@ -53,14 +55,7 @@ func stream(c *gin.Context) {
 		return
 	}
 
-	if title == "" {
-		title = c.Param("fname")
-		title, _ = url.PathUnescape(title)
-		title = strings.TrimLeft(title, "/")
-	} else {
-		title, _ = url.QueryUnescape(title)
-	}
-
+	title, _ = url.QueryUnescape(title)
 	link, _ = url.QueryUnescape(link)
 	poster, _ = url.QueryUnescape(poster)
 
@@ -70,10 +65,24 @@ func stream(c *gin.Context) {
 		return
 	}
 
-	tor, err := torr.AddTorrent(spec, title, poster, "")
-	if err != nil {
-		c.AbortWithError(http.StatusInternalServerError, err)
-		return
+	tor := torr.GetTorrent(spec.InfoHash.HexString())
+	if tor != nil {
+		title = tor.Title
+		poster = tor.Poster
+		data = tor.Data
+	}
+	if tor == nil || tor.Stat == state.TorrentInDB {
+		if title == "" {
+			title = c.Param("fname")
+			title, _ = url.PathUnescape(title)
+			title = strings.TrimLeft(title, "/")
+		}
+
+		tor, err = torr.AddTorrent(spec, title, poster, data)
+		if err != nil {
+			c.AbortWithError(http.StatusInternalServerError, err)
+			return
+		}
 	}
 
 	if !tor.GotInfo() {
@@ -129,6 +138,7 @@ func streamNoAuth(c *gin.Context) {
 	_, preload := c.GetQuery("preload")
 	title := c.Query("title")
 	poster := c.Query("poster")
+	data := ""
 
 	if link == "" {
 		c.AbortWithError(http.StatusBadRequest, errors.New("link should not be empty"))
@@ -153,9 +163,23 @@ func streamNoAuth(c *gin.Context) {
 	}
 
 	tor := torr.GetTorrent(spec.InfoHash.HexString())
-	if tor == nil {
-		c.AbortWithError(http.StatusNotFound, errors.New("Torrent not found"))
-		return
+	if tor != nil {
+		title = tor.Title
+		poster = tor.Poster
+		data = tor.Data
+	}
+	if tor == nil || tor.Stat == state.TorrentInDB {
+		if title == "" {
+			title = c.Param("fname")
+			title, _ = url.PathUnescape(title)
+			title = strings.TrimLeft(title, "/")
+		}
+
+		tor, err = torr.AddTorrent(spec, title, poster, data)
+		if err != nil {
+			c.AbortWithError(http.StatusInternalServerError, err)
+			return
+		}
 	}
 
 	if !tor.GotInfo() {

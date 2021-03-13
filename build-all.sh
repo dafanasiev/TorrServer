@@ -2,14 +2,14 @@
 
 PLATFORMS=""
 PLATFORMS="$PLATFORMS linux/amd64 linux/386"
-PLATFORMS="$PLATFORMS windows/amd64 windows/386"
-PLATFORMS="$PLATFORMS darwin/amd64 darwin/arm64"
-PLATFORMS="$PLATFORMS freebsd/amd64"
-PLATFORMS="$PLATFORMS linux/mips linux/mipsle linux/mips64 linux/mips64le"
+#PLATFORMS="$PLATFORMS windows/amd64 windows/386"
+#PLATFORMS="$PLATFORMS darwin/amd64 darwin/arm64"
+#PLATFORMS="$PLATFORMS freebsd/amd64"
+#PLATFORMS="$PLATFORMS linux/mips linux/mipsle linux/mips64 linux/mips64le"
 
 type setopt >/dev/null 2>&1
 
-GOBIN="/usr/local/go/bin/go"
+GOBIN=$(whereis -b go | awk {'print $2'})
 #GOBIN="/usr/local/go116b/bin/go"
 
 $GOBIN version

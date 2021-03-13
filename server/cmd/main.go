@@ -41,7 +41,7 @@ func main() {
 	settings.HttpAuth = params.HttpAuth
 	log.Init(params.LogPath)
 
-	Preconfig(params.DontKill)
+	//Preconfig(params.DontKill)
 
 	server.Start(params.Addr, params.RDB)
 	log.TLogln(server.WaitServer())

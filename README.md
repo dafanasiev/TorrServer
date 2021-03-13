@@ -2,9 +2,11 @@
 TorrServer, stream torrent to http
 
 ### Installation
-Just download from releases and exec file
-https://github.com/YouROK/TorrServer/releases
-After open browser link http://127.0.0.1:8090
+Just download server from releases and exec file\
+https://github.com/YouROK/TorrServer/releases \
+After open browser link http://127.0.0.1:8090 \
+On linux systems you need to set the environment variable before run \
+***export GODEBUG=madvdontneed=1***
 
 
 #
@@ -22,9 +24,8 @@ TorrServer [--port PORT] [--path PATH] [--logpath LOGPATH] [--rdb] [--httpauth] 
 * --ui, -u                         run page torrserver in browser
 * --version                        display version and exit
 
-###
 
-
+#
 ### Http Api of TorrServer:
 #### GET
 
@@ -81,7 +82,7 @@ TorrServer [--port PORT] [--path PATH] [--logpath LOGPATH] [--rdb] [--httpauth] 
 ###### /torrents
 ##### Send json:
 {\
-    "action": "add/get/rem/list/drop",\
+    "action": "add/get/set/rem/list/drop",\
     "link": "hash/magnet/link to torrent",\
     "hash": "hash of torrent",\
     "title": "title of torrent",\
@@ -131,8 +132,25 @@ if hash is not empty, return viewed file of torrent
 ##### Json struct see in
 https://github.com/YouROK/TorrServer/blob/d36d0c28f805ceab39adb4aac2869cd7a272085b/server/settings/viewed.go
 
-###
 
+
+#
+### Authorization
+
+The user data file should be located near to the settings.\
+Basic auth, read more in wiki \
+https://en.wikipedia.org/wiki/Basic_access_authentication
+
+File name: *accs.db*\
+File format:
+
+{\
+    "User1": "Pass1",\
+    "User2": "Pass2"\
+}
+
+
+#
 ### Donate:
 [PayPal](https://www.paypal.me/yourok)
 
@@ -141,8 +159,8 @@ YooMoney card: 5599 0050 6424 4747
 
 SberBank card: 4276 4000 6707 2919
 
-###
 
+#
 ### Thanks to everyone who tested and helped
 
 ###### **Anacrolix Matt Joiner** [github.com/anacrolix](https://github.com/anacrolix/)
