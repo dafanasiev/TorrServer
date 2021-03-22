@@ -2,6 +2,7 @@ package torrstor
 
 import (
 	"io"
+	"strings"
 	"sync"
 
 	"github.com/anacrolix/torrent"
@@ -62,6 +63,25 @@ func (r *Reader) Read(p []byte) (n int, err error) {
 	}
 	if r.file.Torrent() != nil && r.file.Torrent().Info() != nil {
 		n, err = r.Reader.Read(p)
+
+		//samsung tv fix xvid/divx
+		if r.offset == 0 && len(p) >= 192 {
+			str := strings.ToLower(string(p[112:116]))
+			if str == "xvid" || str == "divx" {
+				p[112] = 0x4D //M
+				p[113] = 0x50 //P
+				p[114] = 0x34 //4
+				p[115] = 0x56 //V
+			}
+			str = strings.ToLower(string(p[188:192]))
+			if str == "xvid" || str == "divx" {
+				p[188] = 0x4D //M
+				p[189] = 0x50 //P
+				p[190] = 0x34 //4
+				p[191] = 0x56 //V
+			}
+		}
+
 		r.offset += int64(n)
 	} else {
 		log.TLogln("Torrent closed and readed")
@@ -70,6 +90,9 @@ func (r *Reader) Read(p []byte) (n int, err error) {
 }
 
 func (r *Reader) SetReadahead(length int64) {
+	if r.cache != nil && length > r.cache.capacity {
+		length = r.cache.capacity
+	}
 	r.Reader.SetReadahead(length)
 	r.readahead = length
 }
