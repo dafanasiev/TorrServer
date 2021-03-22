@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 set -e
 
-exec mpv --fullscreen "http://localhost:8090$1"
+mpv --fullscreen "http://localhost:8090$1" >/tmp/exec.log
