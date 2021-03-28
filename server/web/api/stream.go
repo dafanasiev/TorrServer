@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 
 	"server/torr"
 	"server/torr/state"
@@ -21,6 +20,7 @@ import (
 // http://127.0.0.1:8090/stream/fname?link=...&index=1&m3u&fromlast
 // stream torrent
 // http://127.0.0.1:8090/stream/fname?link=...&index=1&play
+// http://127.0.0.1:8090/stream/fname?link=...&index=1&play&preload
 // http://127.0.0.1:8090/stream/fname?link=...&index=1&play&save
 // http://127.0.0.1:8090/stream/fname?link=...&index=1&play&save&title=...&poster=...
 // only save
@@ -72,12 +72,6 @@ func stream(c *gin.Context) {
 		data = tor.Data
 	}
 	if tor == nil || tor.Stat == state.TorrentInDB {
-		if title == "" {
-			title = c.Param("fname")
-			title, _ = url.PathUnescape(title)
-			title = strings.TrimLeft(title, "/")
-		}
-
 		tor, err = torr.AddTorrent(spec, title, poster, data)
 		if err != nil {
 			c.AbortWithError(http.StatusInternalServerError, err)
@@ -88,6 +82,10 @@ func stream(c *gin.Context) {
 	if !tor.GotInfo() {
 		c.AbortWithError(http.StatusInternalServerError, errors.New("timeout connection torrent"))
 		return
+	}
+
+	if tor.Title == "" {
+		tor.Title = tor.Name()
 	}
 
 	// save to db
@@ -145,16 +143,7 @@ func streamNoAuth(c *gin.Context) {
 		return
 	}
 
-	if title == "" {
-		title = c.Param("fname")
-		title, _ = url.PathUnescape(title)
-		title = strings.TrimLeft(title, "/")
-	} else {
-		title, _ = url.QueryUnescape(title)
-	}
-
 	link, _ = url.QueryUnescape(link)
-	poster, _ = url.QueryUnescape(poster)
 
 	spec, err := utils.ParseLink(link)
 	if err != nil {
@@ -163,18 +152,16 @@ func streamNoAuth(c *gin.Context) {
 	}
 
 	tor := torr.GetTorrent(spec.InfoHash.HexString())
-	if tor != nil {
-		title = tor.Title
-		poster = tor.Poster
-		data = tor.Data
+	if tor == nil {
+		c.AbortWithStatus(http.StatusForbidden)
+		return
 	}
-	if tor == nil || tor.Stat == state.TorrentInDB {
-		if title == "" {
-			title = c.Param("fname")
-			title, _ = url.PathUnescape(title)
-			title = strings.TrimLeft(title, "/")
-		}
 
+	title = tor.Title
+	poster = tor.Poster
+	data = tor.Data
+
+	if tor.Stat == state.TorrentInDB {
 		tor, err = torr.AddTorrent(spec, title, poster, data)
 		if err != nil {
 			c.AbortWithError(http.StatusInternalServerError, err)
