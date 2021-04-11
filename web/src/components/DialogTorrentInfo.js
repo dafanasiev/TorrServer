@@ -20,7 +20,7 @@ const style = {
     poster: {
         display: 'flex',
         flexDirection: 'row',
-        borderRadius:'5px',
+        borderRadius: '5px',
     },
 }
 
