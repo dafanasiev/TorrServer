@@ -1,6 +1,10 @@
 package torrstor
 
 import (
+	"encoding/json"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"sort"
 	"sync"
 	"time"
@@ -35,7 +39,12 @@ type Cache struct {
 	isRemove bool
 	muRemove sync.Mutex
 	torrent  *torrent.Torrent
+
+	info *metainfo.Info
+	file *os.File
 }
+
+const FileRangeNotDelete = 5 * 1024 * 1024
 
 func NewCache(capacity int64, storage *Storage) *Cache {
 	ret := &Cache{
@@ -51,6 +60,7 @@ func NewCache(capacity int64, storage *Storage) *Cache {
 
 func (c *Cache) Init(info *metainfo.Info, hash metainfo.Hash) {
 	log.TLogln("Create cache for:", info.Name, hash.HexString())
+	c.info = info
 	if c.capacity == 0 {
 		c.capacity = info.PieceLength * 4
 	}
@@ -59,11 +69,22 @@ func (c *Cache) Init(info *metainfo.Info, hash metainfo.Hash) {
 	c.pieceCount = info.NumPieces()
 	c.hash = hash
 
-	for i := 0; i < c.pieceCount; i++ {
-		c.pieces[i] = &Piece{
-			Id:    i,
-			cache: c,
+	if settings.BTsets.UseDisk {
+		name := filepath.Join(settings.BTsets.TorrentsSavePath, hash.HexString())
+		ff, err := os.OpenFile(name, os.O_RDWR|os.O_CREATE, 0666)
+		if err != nil {
+			log.TLogln("Error open file:", err)
+		} else {
+			c.file = ff
 		}
+	}
+
+	for i := 0; i < c.pieceCount; i++ {
+		c.pieces[i] = NewPiece(i, c)
+	}
+
+	if settings.BTsets.UseDisk {
+		c.loadInfo()
 	}
 }
 
@@ -80,14 +101,16 @@ func (c *Cache) Piece(m metainfo.Piece) storage.PieceImpl {
 
 func (c *Cache) Close() error {
 	log.TLogln("Close cache for:", c.hash)
-	if _, ok := c.storage.caches[c.hash]; ok {
-		delete(c.storage.caches, c.hash)
-	}
+	delete(c.storage.caches, c.hash)
 	c.pieces = nil
 
 	c.muReaders.Lock()
 	c.readers = nil
 	c.muReaders.Unlock()
+
+	if c.file != nil {
+		c.file.Close()
+	}
 
 	utils.FreeOSMemGC()
 	return nil
@@ -120,7 +143,7 @@ func (c *Cache) GetState() *state.CacheState {
 				Id:        p.Id,
 				Size:      p.Size,
 				Length:    c.pieceLength,
-				Completed: p.complete,
+				Completed: p.Complete,
 			}
 		}
 	}
@@ -204,12 +227,15 @@ func (c *Cache) getRemPieces() []*Piece {
 	}
 
 	for r, _ := range c.readers {
+		if c.isIdInFileBE(ranges, r.getReaderPiece()) {
+			continue
+		}
 		pc := r.getReaderPiece()
 		end := r.getPiecesRange().End
 		limit := 5
 
 		for pc <= end && limit > 0 {
-			if !c.pieces[pc].complete {
+			if !c.pieces[pc].Complete {
 				if c.torrent.PieceState(pc).Priority == torrent.PiecePriorityNone {
 					c.torrent.Piece(pc).SetPriority(torrent.PiecePriorityNormal)
 				}
@@ -220,7 +246,7 @@ func (c *Cache) getRemPieces() []*Piece {
 	}
 
 	sort.Slice(piecesRemove, func(i, j int) bool {
-		return piecesRemove[i].accessed < piecesRemove[j].accessed
+		return piecesRemove[i].Accessed < piecesRemove[j].Accessed
 	})
 
 	c.filled = fill
@@ -230,9 +256,9 @@ func (c *Cache) getRemPieces() []*Piece {
 func (c *Cache) isIdInFileBE(ranges []Range, id int) bool {
 	for _, rng := range ranges {
 		ss := int(rng.File.Offset() / c.pieceLength)
-		se := int((5*1024*1024 + rng.File.Offset()) / c.pieceLength)
+		se := int((FileRangeNotDelete + rng.File.Offset()) / c.pieceLength)
 
-		es := int((rng.File.Offset() + rng.File.Length() - 5*1024*1024) / c.pieceLength)
+		es := int((rng.File.Offset() + rng.File.Length() - FileRangeNotDelete) / c.pieceLength)
 		ee := int((rng.File.Offset() + rng.File.Length()) / c.pieceLength)
 
 		if id >= ss && id <= se || id >= es && id <= ee {
@@ -240,6 +266,55 @@ func (c *Cache) isIdInFileBE(ranges []Range, id int) bool {
 		}
 	}
 	return false
+}
+
+func (c *Cache) loadPieces() {
+	ranges := make([]Range, 0)
+	c.muReaders.Lock()
+	for r, _ := range c.readers {
+		ranges = append(ranges, r.getPiecesRange())
+	}
+	c.muReaders.Unlock()
+	ranges = mergeRange(ranges)
+
+	for r, _ := range c.readers {
+		pc := r.getReaderPiece()
+		limit := 5
+
+		for limit > 0 {
+			if !c.pieces[pc].Complete {
+				if c.torrent.PieceState(pc).Priority == torrent.PiecePriorityNone {
+					c.torrent.Piece(pc).SetPriority(torrent.PiecePriorityNormal)
+				}
+				limit--
+			}
+			pc++
+		}
+	}
+}
+
+func (c *Cache) loadInfo() {
+	name := c.file.Name() + ".info"
+	buf, err := ioutil.ReadFile(name)
+	if err == nil {
+		var pieces map[int]*Piece
+		err := json.Unmarshal(buf, &pieces)
+		if err == nil {
+			for id, p := range pieces {
+				c.pieces[id].Size = p.Size
+				c.pieces[id].Complete = p.Complete
+				c.pieces[id].Accessed = p.Accessed
+			}
+		}
+	}
+}
+
+func (c *Cache) saveInfo() {
+	buf, err := json.Marshal(c.pieces)
+	if err == nil {
+		name := c.file.Name() + ".info"
+		ioutil.WriteFile(name, buf, 0666)
+	}
 }
 
 //////////////////
